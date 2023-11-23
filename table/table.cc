@@ -9,6 +9,7 @@
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
+
 #include "table/block.h"
 #include "table/filter_block.h"
 #include "table/format.h"
@@ -149,11 +150,12 @@ static void ReleaseBlock(void* arg, void* h) {
 }
 
 // Convert an index iterator value (i.e., an encoded BlockHandle)
-// into an iterator over the contents of the corresponding block.
-Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
-                             const Slice& index_value) {
+// into an iterator over the contents of the corresponding data block.
+Iterator* Table::DataBlockReader(void* arg, const ReadOptions& options,
+                                 const Slice& index_value) {
   Table* table = reinterpret_cast<Table*>(arg);
   Cache* block_cache = table->rep_->options.block_cache;
+  const BlockFactory* block_factory = table->rep_->options.data_block_factory;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;
 
@@ -175,8 +177,12 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
       } else {
         s = ReadBlock(table->rep_->file, options, handle, &contents);
+        std::unique_ptr<Block> block_guard;
         if (s.ok()) {
-          block = new BlockImpl(contents);
+          s = block_factory->NewBlock(contents, &block_guard);
+        }
+        if (s.ok()) {
+          block = block_guard.release();
           if (contents.cachable && options.fill_cache) {
             cache_handle = block_cache->Insert(key, block, block->size(),
                                                &DeleteCachedBlock);
@@ -185,8 +191,12 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
       }
     } else {
       s = ReadBlock(table->rep_->file, options, handle, &contents);
+      std::unique_ptr<Block> block_guard;
       if (s.ok()) {
-        block = new BlockImpl(contents);
+        s = block_factory->NewBlock(contents, &block_guard);
+      }
+      if (s.ok()) {
+        block = block_guard.release();
       }
     }
   }
@@ -208,7 +218,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
 Iterator* Table::NewIterator(const ReadOptions& options) const {
   return NewTwoLevelIterator(
       rep_->index_block->NewIterator(rep_->options.comparator),
-      &Table::BlockReader, const_cast<Table*>(this), options);
+      &Table::DataBlockReader, const_cast<Table*>(this), options);
 }
 
 Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
@@ -225,7 +235,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
         !filter->KeyMayMatch(handle.offset(), k)) {
       // Not found
     } else {
-      Iterator* block_iter = BlockReader(this, options, iiter->value());
+      Iterator* block_iter = DataBlockReader(this, options, iiter->value());
       block_iter->Seek(k);
       if (block_iter->Valid()) {
         (*handle_result)(arg, block_iter->key(), block_iter->value());
