@@ -156,6 +156,8 @@ target_sources(leveldb
     "port/thread_annotations.h"
     "table/block_builder.cc"
     "table/block_builder.h"
+    "table/block_factory.cc"
+    "table/block_factory.h"
     "table/block.cc"
     "table/block.h"
     "table/filter_block.cc"

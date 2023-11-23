@@ -1,9 +1,12 @@
 #ifndef STORAGE_LEVELDB_INCLUDE_BLOCK_H
 #define STORAGE_LEVELDB_INCLUDE_BLOCK_H
 
+#include <memory>
+
 #include "leveldb/comparator.h"
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
+#include "leveldb/options.h"
 #include "leveldb/slice.h"
 
 namespace leveldb {
@@ -40,6 +43,25 @@ class LEVELDB_EXPORT Block {
 
   virtual ~Block() {}
 };
+
+struct BlockContents {
+  Slice data;           // Actual contents of data
+  bool cachable;        // True iff data can be cached
+  bool heap_allocated;  // True iff caller should delete[] data.data()
+};
+
+class LEVELDB_EXPORT BlockFactory {
+ public:
+  virtual Status NewBlockBuilder(const Options* options,
+                                 std::unique_ptr<BlockBuilder>* res) const = 0;
+
+  virtual Status NewBlock(const BlockContents& contents,
+                          std::unique_ptr<Block>* res) const = 0;
+
+  virtual ~BlockFactory() {}
+};
+
+Status NewBlockFactory(std::unique_ptr<BlockFactory>* res);
 
 }  // namespace leveldb
 
