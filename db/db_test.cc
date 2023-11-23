@@ -4,25 +4,27 @@
 
 #include "leveldb/db.h"
 
-#include <atomic>
-#include <cinttypes>
-#include <string>
-
-#include "gtest/gtest.h"
 #include "db/db_impl.h"
 #include "db/filename.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <atomic>
+#include <cinttypes>
+#include <string>
+
 #include "leveldb/cache.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/table.h"
+
 #include "port/port.h"
 #include "port/thread_annotations.h"
 #include "util/hash.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/testutil.h"
+
+#include "gtest/gtest.h"
 
 namespace leveldb {
 
@@ -257,6 +259,129 @@ class SpecialEnv : public EnvWrapper {
   }
 };
 
+const std::string kKeyPrefix = "33";
+
+Status EncodePrefixedKey(const std::string& in, std::string* out) {
+  out->clear();
+  out->reserve(in.size() + kKeyPrefix.size());
+  out->append(kKeyPrefix);
+  out->append(in);
+  return Status::OK();
+}
+
+Status DecodePrefixedKey(const Slice& in, Slice* out) {
+  if (!in.starts_with(kKeyPrefix)) {
+    return Status::Corruption("key prefix mismatch");
+  }
+  *out = in;
+  out->remove_prefix(kKeyPrefix.size());
+  return Status::OK();
+}
+
+class PrefixedKeyBlockBuilder : public BlockBuilder {
+ public:
+  explicit PrefixedKeyBlockBuilder(std::unique_ptr<BlockBuilder> wrapped)
+      : wrapped_(std::move(wrapped)) {}
+
+  void Reset() override { return wrapped_->Reset(); }
+
+  void Add(const Slice& key, const Slice& value) override {
+    std::string encoded_key;
+    Status s = EncodePrefixedKey(key.ToString(), &encoded_key);
+    assert(s.ok());
+    return wrapped_->Add(encoded_key, value);
+  }
+
+  Slice Finish() override { return wrapped_->Finish(); }
+
+  size_t CurrentSizeEstimate() const override {
+    return wrapped_->CurrentSizeEstimate();
+  }
+
+  bool empty() const override { return wrapped_->empty(); }
+
+ private:
+  std::unique_ptr<BlockBuilder> wrapped_;
+};
+
+class PrefixedKeyIterator : public Iterator {
+ public:
+  explicit PrefixedKeyIterator(std::unique_ptr<Iterator> wrapped)
+      : wrapped_(std::move(wrapped)) {}
+
+  bool Valid() const override { return wrapped_->Valid(); }
+
+  void SeekToFirst() override { return wrapped_->SeekToFirst(); }
+
+  void SeekToLast() override { return wrapped_->SeekToLast(); }
+
+  void Seek(const Slice& target) override {
+    std::string encoded_target;
+    Status s = EncodePrefixedKey(target.ToString(), &encoded_target);
+    assert(s.ok());
+    return wrapped_->Seek(encoded_target);
+  }
+
+  void Next() override { return wrapped_->Next(); }
+
+  void Prev() override { return wrapped_->Prev(); }
+
+  Slice key() const override {
+    Slice decoded_key;
+    Status s = DecodePrefixedKey(wrapped_->key(), &decoded_key);
+    assert(s.ok());
+    return decoded_key;
+  }
+
+  Slice value() const override { return wrapped_->value(); }
+
+  Status status() const override { return wrapped_->status(); }
+
+ private:
+  std::unique_ptr<Iterator> wrapped_;
+};
+
+class PrefixedKeyBlock : public Block {
+ public:
+  explicit PrefixedKeyBlock(std::unique_ptr<Block> wrapped)
+      : wrapped_(std::move(wrapped)) {}
+
+  size_t size() const override { return wrapped_->size(); }
+
+  Iterator* NewIterator(const Comparator* comparator) override {
+    std::unique_ptr<Iterator> wrapped(wrapped_->NewIterator(comparator));
+    return new PrefixedKeyIterator(std::move(wrapped));
+  }
+
+ private:
+  std::unique_ptr<Block> wrapped_;
+};
+
+class PrefixedKeyBlockFactory : public BlockFactory {
+ public:
+  PrefixedKeyBlockFactory() {}
+
+  Status NewBlockBuilder(const Options* options,
+                         std::unique_ptr<BlockBuilder>* res) const override {
+    std::unique_ptr<BlockBuilder> wrapped;
+    Status s = BlockFactory::Default()->NewBlockBuilder(options, &wrapped);
+    if (s.ok()) {
+      res->reset(new PrefixedKeyBlockBuilder(std::move(wrapped)));
+    }
+    return s;
+  }
+
+  Status NewBlock(const BlockContents& contents,
+                  std::unique_ptr<Block>* res) const override {
+    std::unique_ptr<Block> wrapped;
+    Status s = BlockFactory::Default()->NewBlock(contents, &wrapped);
+    if (s.ok()) {
+      res->reset(new PrefixedKeyBlock(std::move(wrapped)));
+    }
+    return s;
+  }
+};
+
 class DBTest : public testing::Test {
  public:
   std::string dbname_;
@@ -267,6 +392,7 @@ class DBTest : public testing::Test {
 
   DBTest() : env_(new SpecialEnv(Env::Default())), option_config_(kDefault) {
     filter_policy_ = NewBloomFilterPolicy(10);
+    block_factory_ = new PrefixedKeyBlockFactory();
     dbname_ = testing::TempDir() + "db_test";
     DestroyDB(dbname_, Options());
     db_ = nullptr;
@@ -278,6 +404,7 @@ class DBTest : public testing::Test {
     DestroyDB(dbname_, Options());
     delete env_;
     delete filter_policy_;
+    delete block_factory_;
   }
 
   // Switch to a fresh database with the next option configuration to
@@ -305,6 +432,9 @@ class DBTest : public testing::Test {
         break;
       case kUncompressed:
         options.compression = kNoCompression;
+        break;
+      case kBlockFactory:
+        options.data_block_factory = block_factory_;
         break;
       default:
         break;
@@ -562,9 +692,17 @@ class DBTest : public testing::Test {
 
  private:
   // Sequence of option configurations to try
-  enum OptionConfig { kDefault, kReuse, kFilter, kUncompressed, kEnd };
+  enum OptionConfig {
+    kDefault,
+    kReuse,
+    kFilter,
+    kUncompressed,
+    kBlockFactory,
+    kEnd
+  };
 
   const FilterPolicy* filter_policy_;
+  const BlockFactory* block_factory_;
   int option_config_;
 };
 
