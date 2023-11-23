@@ -4,11 +4,15 @@
 
 #include "leveldb/options.h"
 
+#include "leveldb/block.h"
 #include "leveldb/comparator.h"
 #include "leveldb/env.h"
 
 namespace leveldb {
 
-Options::Options() : comparator(BytewiseComparator()), env(Env::Default()) {}
+Options::Options()
+    : comparator(BytewiseComparator()),
+      env(Env::Default()),
+      data_block_factory(BlockFactory::Default()) {}
 
 }  // namespace leveldb

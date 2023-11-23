@@ -17,6 +17,11 @@ Status BlockFactoryImpl::NewBlock(const BlockContents& contents,
   return Status::OK();
 }
 
+BlockFactory* BlockFactory::Default() {
+  static BlockFactoryImpl res;
+  return &res;
+}
+
 Status NewBlockFactory(std::unique_ptr<BlockFactory>* res) {
   res->reset(new BlockFactoryImpl());
   return Status::OK();

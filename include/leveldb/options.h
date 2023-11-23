@@ -11,6 +11,7 @@
 
 namespace leveldb {
 
+class BlockFactory;
 class Cache;
 class Comparator;
 class Env;
@@ -145,6 +146,8 @@ struct LEVELDB_EXPORT Options {
   // Many applications will benefit from passing the result of
   // NewBloomFilterPolicy() here.
   const FilterPolicy* filter_policy = nullptr;
+
+  const BlockFactory* data_block_factory;
 };
 
 // Options that control read operations

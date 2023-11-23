@@ -58,6 +58,8 @@ class LEVELDB_EXPORT BlockFactory {
   virtual Status NewBlock(const BlockContents& contents,
                           std::unique_ptr<Block>* res) const = 0;
 
+  static BlockFactory* Default();
+
   virtual ~BlockFactory() {}
 };
 
