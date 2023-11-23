@@ -182,7 +182,7 @@ class BlockConstructor : public Constructor {
   Status FinishImpl(const Options& options, const KVMap& data) override {
     delete block_;
     block_ = nullptr;
-    BlockBuilder builder(&options);
+    BlockBuilderImpl builder(&options);
 
     for (const auto& kvp : data) {
       builder.Add(kvp.first, kvp.second);
@@ -193,7 +193,7 @@ class BlockConstructor : public Constructor {
     contents.data = data_;
     contents.cachable = false;
     contents.heap_allocated = false;
-    block_ = new Block(contents);
+    block_ = new BlockImpl(contents);
     return Status::OK();
   }
   Iterator* NewIterator() const override {
@@ -628,7 +628,7 @@ TEST_F(Harness, ZeroRestartPointsInBlock) {
   contents.data = Slice(data, sizeof(data));
   contents.cachable = false;
   contents.heap_allocated = false;
-  Block block(contents);
+  BlockImpl block(contents);
   Iterator* iter = block.NewIterator(BytewiseComparator());
   iter->SeekToFirst();
   ASSERT_TRUE(!iter->Valid());

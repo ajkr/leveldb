@@ -14,7 +14,6 @@
 
 namespace leveldb {
 
-class Block;
 class RandomAccessFile;
 struct ReadOptions;
 

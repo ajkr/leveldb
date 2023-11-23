@@ -40,8 +40,8 @@ struct TableBuilder::Rep {
   WritableFile* file;
   uint64_t offset;
   Status status;
-  BlockBuilder data_block;
-  BlockBuilder index_block;
+  BlockBuilderImpl data_block;
+  BlockBuilderImpl index_block;
   std::string last_key;
   int64_t num_entries;
   bool closed;  // Either Finish() or Abandon() has been called.
@@ -226,7 +226,7 @@ Status TableBuilder::Finish() {
 
   // Write metaindex block
   if (ok()) {
-    BlockBuilder meta_index_block(&r->options);
+    BlockBuilderImpl meta_index_block(&r->options);
     if (r->filter_block != nullptr) {
       // Add mapping from "filter.Name" to location of filter data
       std::string key = "filter.";

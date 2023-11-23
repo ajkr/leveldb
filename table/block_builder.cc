@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 //
-// BlockBuilder generates blocks where keys are prefix-compressed:
+// BlockBuilderImpl generates blocks where keys are prefix-compressed:
 //
 // When we store a key, we drop the prefix shared with the previous
 // string.  This helps reduce the space requirement significantly.
@@ -37,13 +37,13 @@
 
 namespace leveldb {
 
-BlockBuilder::BlockBuilder(const Options* options)
+BlockBuilderImpl::BlockBuilderImpl(const Options* options)
     : options_(options), restarts_(), counter_(0), finished_(false) {
   assert(options->block_restart_interval >= 1);
   restarts_.push_back(0);  // First restart point is at offset 0
 }
 
-void BlockBuilder::Reset() {
+void BlockBuilderImpl::Reset() {
   buffer_.clear();
   restarts_.clear();
   restarts_.push_back(0);  // First restart point is at offset 0
@@ -52,13 +52,13 @@ void BlockBuilder::Reset() {
   last_key_.clear();
 }
 
-size_t BlockBuilder::CurrentSizeEstimate() const {
+size_t BlockBuilderImpl::CurrentSizeEstimate() const {
   return (buffer_.size() +                       // Raw data buffer
           restarts_.size() * sizeof(uint32_t) +  // Restart array
           sizeof(uint32_t));                     // Restart array length
 }
 
-Slice BlockBuilder::Finish() {
+Slice BlockBuilderImpl::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {
     PutFixed32(&buffer_, restarts_[i]);
@@ -68,7 +68,7 @@ Slice BlockBuilder::Finish() {
   return Slice(buffer_);
 }
 
-void BlockBuilder::Add(const Slice& key, const Slice& value) {
+void BlockBuilderImpl::Add(const Slice& key, const Slice& value) {
   Slice last_key_piece(last_key_);
   assert(!finished_);
   assert(counter_ <= options_->block_restart_interval);

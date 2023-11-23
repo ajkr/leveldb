@@ -17,12 +17,12 @@
 
 namespace leveldb {
 
-inline uint32_t Block::NumRestarts() const {
+inline uint32_t BlockImpl::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
 }
 
-Block::Block(const BlockContents& contents)
+BlockImpl::BlockImpl(const BlockContents& contents)
     : data_(contents.data.data()),
       size_(contents.data.size()),
       owned_(contents.heap_allocated) {
@@ -39,7 +39,7 @@ Block::Block(const BlockContents& contents)
   }
 }
 
-Block::~Block() {
+BlockImpl::~BlockImpl() {
   if (owned_) {
     delete[] data_;
   }
@@ -74,7 +74,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
   return p;
 }
 
-class Block::Iter : public Iterator {
+class BlockImpl::Iter : public Iterator {
  private:
   const Comparator* const comparator_;
   const char* const data_;       // underlying block contents
@@ -277,7 +277,7 @@ class Block::Iter : public Iterator {
   }
 };
 
-Iterator* Block::NewIterator(const Comparator* comparator) {
+Iterator* BlockImpl::NewIterator(const Comparator* comparator) {
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));
   }

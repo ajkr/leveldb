@@ -12,7 +12,6 @@
 
 namespace leveldb {
 
-class Block;
 class BlockHandle;
 class Footer;
 struct Options;

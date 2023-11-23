@@ -15,13 +15,13 @@
 
 #include <cstdint>
 
+#include "leveldb/block.h"
 #include "leveldb/export.h"
 #include "leveldb/options.h"
 #include "leveldb/status.h"
 
 namespace leveldb {
 
-class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 

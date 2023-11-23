@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "leveldb/block.h"
 #include "leveldb/iterator.h"
 
 namespace leveldb {
@@ -15,18 +16,18 @@ namespace leveldb {
 struct BlockContents;
 class Comparator;
 
-class Block {
+class BlockImpl : public Block {
  public:
   // Initialize the block with the specified contents.
-  explicit Block(const BlockContents& contents);
+  explicit BlockImpl(const BlockContents& contents);
 
-  Block(const Block&) = delete;
-  Block& operator=(const Block&) = delete;
+  BlockImpl(const BlockImpl&) = delete;
+  BlockImpl& operator=(const BlockImpl&) = delete;
 
-  ~Block();
+  ~BlockImpl();
 
-  size_t size() const { return size_; }
-  Iterator* NewIterator(const Comparator* comparator);
+  size_t size() const override { return size_; }
+  Iterator* NewIterator(const Comparator* comparator) override;
 
  private:
   class Iter;
@@ -36,7 +37,7 @@ class Block {
   const char* data_;
   size_t size_;
   uint32_t restart_offset_;  // Offset in data_ of restart array
-  bool owned_;               // Block owns data_[]
+  bool owned_;               // BlockImpl owns data_[]
 };
 
 }  // namespace leveldb
