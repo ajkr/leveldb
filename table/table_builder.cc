@@ -10,6 +10,7 @@
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/options.h"
+
 #include "table/block_builder.h"
 #include "table/filter_block.h"
 #include "table/format.h"
@@ -24,7 +25,6 @@ struct TableBuilder::Rep {
         index_block_options(opt),
         file(f),
         offset(0),
-        data_block(&options),
         index_block(&index_block_options),
         num_entries(0),
         closed(false),
@@ -32,6 +32,12 @@ struct TableBuilder::Rep {
                          ? nullptr
                          : new FilterBlockBuilder(opt.filter_policy)),
         pending_index_entry(false) {
+    {
+      std::unique_ptr<BlockBuilder> guard;
+      Status s = options.data_block_factory->NewBlockBuilder(&options, &guard);
+      assert(s.ok());
+      data_block = guard.release();
+    }
     index_block_options.block_restart_interval = 1;
   }
 
@@ -40,7 +46,7 @@ struct TableBuilder::Rep {
   WritableFile* file;
   uint64_t offset;
   Status status;
-  BlockBuilderImpl data_block;
+  BlockBuilder* data_block;
   BlockBuilderImpl index_block;
   std::string last_key;
   int64_t num_entries;
@@ -100,7 +106,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   }
 
   if (r->pending_index_entry) {
-    assert(r->data_block.empty());
+    assert(r->data_block->empty());
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
     r->pending_handle.EncodeTo(&handle_encoding);
@@ -114,9 +120,9 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
 
   r->last_key.assign(key.data(), key.size());
   r->num_entries++;
-  r->data_block.Add(key, value);
+  r->data_block->Add(key, value);
 
-  const size_t estimated_block_size = r->data_block.CurrentSizeEstimate();
+  const size_t estimated_block_size = r->data_block->CurrentSizeEstimate();
   if (estimated_block_size >= r->options.block_size) {
     Flush();
   }
@@ -126,9 +132,9 @@ void TableBuilder::Flush() {
   Rep* r = rep_;
   assert(!r->closed);
   if (!ok()) return;
-  if (r->data_block.empty()) return;
+  if (r->data_block->empty()) return;
   assert(!r->pending_index_entry);
-  WriteBlock(&r->data_block, &r->pending_handle);
+  WriteBlock(r->data_block, &r->pending_handle);
   if (ok()) {
     r->pending_index_entry = true;
     r->status = r->file->Flush();
