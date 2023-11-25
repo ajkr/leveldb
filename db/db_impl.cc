@@ -949,6 +949,11 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       has_current_user_key = false;
       last_sequence_for_key = kMaxSequenceNumber;
     } else {
+      Slice prefix;
+      if (options_.prefix_extractor != nullptr) {
+        prefix = options_.prefix_extractor->Transform(ikey.user_key);
+      }
+
       if (!has_current_user_key ||
           user_comparator()->Compare(ikey.user_key, Slice(current_user_key)) !=
               0) {

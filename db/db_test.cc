@@ -4,25 +4,27 @@
 
 #include "leveldb/db.h"
 
-#include <atomic>
-#include <cinttypes>
-#include <string>
-
-#include "gtest/gtest.h"
 #include "db/db_impl.h"
 #include "db/filename.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include <atomic>
+#include <cinttypes>
+#include <string>
+
 #include "leveldb/cache.h"
 #include "leveldb/env.h"
 #include "leveldb/filter_policy.h"
 #include "leveldb/table.h"
+
 #include "port/port.h"
 #include "port/thread_annotations.h"
 #include "util/hash.h"
 #include "util/logging.h"
 #include "util/mutexlock.h"
 #include "util/testutil.h"
+
+#include "gtest/gtest.h"
 
 namespace leveldb {
 
@@ -267,6 +269,7 @@ class DBTest : public testing::Test {
 
   DBTest() : env_(new SpecialEnv(Env::Default())), option_config_(kDefault) {
     filter_policy_ = NewBloomFilterPolicy(10);
+    prefix_extractor_ = new CappedPrefixTransform(1 /* cap_len */);
     dbname_ = testing::TempDir() + "db_test";
     DestroyDB(dbname_, Options());
     db_ = nullptr;
@@ -278,6 +281,7 @@ class DBTest : public testing::Test {
     DestroyDB(dbname_, Options());
     delete env_;
     delete filter_policy_;
+    delete prefix_extractor_;
   }
 
   // Switch to a fresh database with the next option configuration to
@@ -305,6 +309,9 @@ class DBTest : public testing::Test {
         break;
       case kUncompressed:
         options.compression = kNoCompression;
+        break;
+      case kPrefixExtractor:
+        options.prefix_extractor = prefix_extractor_;
         break;
       default:
         break;
@@ -562,9 +569,17 @@ class DBTest : public testing::Test {
 
  private:
   // Sequence of option configurations to try
-  enum OptionConfig { kDefault, kReuse, kFilter, kUncompressed, kEnd };
+  enum OptionConfig {
+    kDefault,
+    kReuse,
+    kFilter,
+    kUncompressed,
+    kPrefixExtractor,
+    kEnd
+  };
 
   const FilterPolicy* filter_policy_;
+  const SliceTransform* prefix_extractor_;
   int option_config_;
 };
 

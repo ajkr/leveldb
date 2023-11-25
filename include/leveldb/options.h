@@ -8,6 +8,7 @@
 #include <cstddef>
 
 #include "leveldb/export.h"
+#include "leveldb/slice.h"
 
 namespace leveldb {
 
@@ -145,6 +146,11 @@ struct LEVELDB_EXPORT Options {
   // Many applications will benefit from passing the result of
   // NewBloomFilterPolicy() here.
   const FilterPolicy* filter_policy = nullptr;
+
+  // If non-null, use the specified `SliceTransform` to extract key prefixes out
+  // of keys. Currently there are no optimizations based on key prefix
+  // knowledge.
+  const SliceTransform* prefix_extractor = nullptr;
 };
 
 // Options that control read operations

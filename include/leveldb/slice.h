@@ -109,6 +109,23 @@ inline int Slice::compare(const Slice& b) const {
   return r;
 }
 
+class LEVELDB_EXPORT SliceTransform {
+ public:
+  virtual Slice Transform(const Slice& key) const = 0;
+};
+
+class CappedPrefixTransform : public SliceTransform {
+ public:
+  explicit CappedPrefixTransform(size_t cap_len) : cap_len_(cap_len) {}
+
+  Slice Transform(const Slice& key) const override {
+    return Slice(key.data(), std::min(cap_len_, key.size()));
+  }
+
+ private:
+  size_t cap_len_;
+};
+
 }  // namespace leveldb
 
 #endif  // STORAGE_LEVELDB_INCLUDE_SLICE_H_
